@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+from app.schemas.products import Product, ProductUpdate
 
 router = APIRouter()
 
@@ -7,16 +7,7 @@ products = {}
 next_id = 1
 
 
-class Product(BaseModel):
-    name: str
-    price: float
-    quantity: int
 
-
-class ProductUpdate(BaseModel):
-    name: str | None = None
-    price: float | None = None
-    quantity: int | None = None
 
 
 @router.get("/products")
