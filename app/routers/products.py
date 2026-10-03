@@ -1,75 +1,114 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
+
+
 from app.schemas.products import Product, ProductUpdate
+from sqlalchemy.orm import Session
+from app.database.dependencies import get_db
+from app.models.product import ProductModel
+
 
 router = APIRouter()
 
-products = {}
-next_id = 1
 
 
 
 
 
 @router.get("/products")
-def get_products():
+def get_products(db: Session = Depends(get_db)):
 
-    return list(products.values())
+    returned_products = db.query(ProductModel).all()
+
+    return returned_products
 
 
 @router.get("/products/{product_id}")
-def get_product(product_id: int):
+def get_product(product_id: int, db: Session = Depends(get_db)):
 
-    if product_id not in products:
+    returned_product = db.query(ProductModel).filter(
+        ProductModel.id == product_id).first()
+
+    if returned_product is None:
         raise HTTPException(status_code=404, detail="Product not found")
 
-    return {"product_id": product_id,
-            "product": products[product_id]}
+    return returned_product
 
 
 @router.post("/products")
-def create_product(product: Product):
-    global next_id
-    product_id = next_id
-    products[product_id] = product
-    next_id += 1
+def create_product(product: Product,
+                   db: Session = Depends(get_db)):
 
-    return {"id": product_id,
-            "product": product}
+    created_product = ProductModel(
+        name=product.name,
+        price=product.price,
+        quantity=product.quantity,
+    )
+
+    db.add(created_product)
+    db.commit()
+    db.refresh(created_product)
+
+    return created_product
+
+
 
 
 @router.delete("/products/{product_id}")
-def delete_product(product_id: int):
+def delete_product(product_id: int,
+                   db: Session = Depends(get_db)):
 
-    if product_id not in products:
+    deleted_product = db.query(ProductModel).filter(
+        ProductModel.id == product_id).first()
+
+    if deleted_product is None:
         raise HTTPException(status_code=404, detail="Product not found")
-    del products[product_id]
+
+    db.delete(deleted_product)
+    db.commit()
 
     return {"message": "Product deleted"}
 
 @router.put("/products/{product_id}")
-def put_product(product_id: int, product: Product):
+def put_product(product_id: int, product: Product,
+                db: Session = Depends(get_db)):
 
-    if product_id not in products:
+    putted_product = db.query(ProductModel).filter(
+        ProductModel.id == product_id
+    ).first()
+
+    if putted_product is None:
         raise HTTPException(status_code=404, detail="Product not found")
-    products[product_id] = product
 
-    return {"product": product}
+    putted_product.name = product.name
+    putted_product.price = product.price
+    putted_product.quantity = product.quantity
+    db.commit()
+    db.refresh(putted_product)
+
+    return  putted_product
 
 
 @router.patch("/products/{product_id}")
-def patch_product(product_id: int, product: ProductUpdate):
+def patch_product(product_id: int,
+                  product: ProductUpdate,
+                  db: Session = Depends(get_db)):
 
-    if product_id not in products:
+    patched_product = db.query(ProductModel).filter(
+        ProductModel.id == product_id
+    ).first()
+
+    if patched_product is None:
         raise HTTPException(status_code=404, detail="Product not found")
 
     update_data = product.model_dump(exclude_unset=True)
-    old_data = products[product_id].model_dump()
+    for key, value in update_data.items():
+        setattr(patched_product, key, value)
 
-    old_data.update(update_data)
+    db.commit()
+    db.refresh(patched_product)
+    
+    return patched_product
 
-    new_product = Product(**old_data)
-    products[product_id] = new_product
 
-    return {"product": new_product}
 
 
